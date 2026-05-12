@@ -70,6 +70,17 @@ function getSession(req) {
   return sessions.get(sessionId) || null;
 }
 
+function requireSession(req, res) {
+  const session = getSession(req);
+
+  if (!session) {
+    sendJson(res, 401, { error: 'Not authenticated' });
+    return null;
+  }
+
+  return session;
+}
+
 function handleLogin(req, res) {
   readRequestBody(req)
     .then((body) => {
@@ -122,14 +133,31 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname === '/api/csrf-token' && req.method === 'GET') {
-    const session = getSession(req);
-
+    const session = requireSession(req, res);
     if (!session) {
-      sendJson(res, 401, { error: 'Not authenticated' });
       return;
     }
 
     sendJson(res, 200, { csrfToken: session.csrfToken });
+    return;
+  }
+
+  if (url.pathname === '/api/transfer' && req.method === 'POST') {
+    const session = requireSession(req, res);
+    if (!session) {
+      return;
+    }
+
+    const providedToken = req.headers['x-csrf-token'];
+    if (!providedToken || providedToken !== session.csrfToken) {
+      sendJson(res, 403, { error: 'Blocked: missing or invalid CSRF token.' });
+      return;
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      message: 'Success: transfer accepted (cookie + valid CSRF token).',
+    });
     return;
   }
 

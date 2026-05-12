@@ -7,6 +7,7 @@ function readStoredAuth() {
   const emptyAuthState = {
     isLoggedIn: false,
     token: null,
+    csrfToken: null,
     user: null,
   };
 
@@ -24,6 +25,7 @@ function readStoredAuth() {
     return {
       isLoggedIn: Boolean(parsedAuth.isLoggedIn && parsedAuth.token),
       token: parsedAuth.token || null,
+      csrfToken: parsedAuth.csrfToken || null,
       user: parsedAuth.user || null,
     };
   } catch {
@@ -69,6 +71,7 @@ export function AuthProvider({ children }) {
       const nextAuthState = {
         isLoggedIn: Boolean(data.isAuthenticated && data.token),
         token: data.token,
+        csrfToken: data.csrfToken || null,
         user: data.user,
       };
 
@@ -93,6 +96,7 @@ export function AuthProvider({ children }) {
     const nextAuthState = {
       isLoggedIn: false,
       token: null,
+      csrfToken: null,
       user: null,
     };
 
@@ -103,6 +107,7 @@ export function AuthProvider({ children }) {
   const value = useMemo(() => ({
     isLoggedIn: authState.isLoggedIn,
     token: authState.token,
+    csrfToken: authState.csrfToken,
     user: authState.user,
     isLoading,
     login,
