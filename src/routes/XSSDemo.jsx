@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 function XSSDemo() {
+  const { isLoggedIn, csrfToken } = useAuth();
   const [vulnerableInput, setVulnerableInput] = useState(
     '<b>Welcome back, Alex</b> <img src=x onerror="alert(\'XSS fired\')" />'
   );
@@ -12,8 +14,12 @@ function XSSDemo() {
   const [cookieSessionEnabled, setCookieSessionEnabled] = useState(true);
   const [sameSiteMode, setSameSiteMode] = useState('none');
   const [csrfTokenOnForm, setCsrfTokenOnForm] = useState(false);
-  const [csrfTokenOnServer, setCsrfTokenOnServer] = useState('secure-123');
+  const [csrfTokenInput, setCsrfTokenInput] = useState('');
   const [requestResult, setRequestResult] = useState('No request yet');
+
+  useEffect(() => {
+    setCsrfTokenInput(csrfToken || '');
+  }, [csrfToken]);
 
   const appendLog = (line) => {
     setSecurityLog((prev) => [line, ...prev].slice(0, 7));
@@ -24,41 +30,68 @@ function XSSDemo() {
     setSafeInput(payload);
   };
 
-  const csrfProtectedTransfer = ({ crossSite, providedToken }) => {
-    const browserSendsCookie = cookieSessionEnabled && (sameSiteMode === 'none' || !crossSite);
-    const csrfTokenValid = providedToken && providedToken === csrfTokenOnServer;
-
-    if (!browserSendsCookie) {
-      return {
-        ok: false,
-        reason: 'Blocked: session cookie not sent (SameSite + cross-site request).',
-      };
+  const sendTransferRequest = async ({ includeToken, requestToken, source }) => {
+    if (!isLoggedIn) {
+      const message = 'Blocked: log in first to create a backend session.';
+      setRequestResult(message);
+      appendLog(`[${source}] POST /api/transfer -> ${message}`);
+      return;
     }
 
-    if (!csrfTokenValid) {
-      return {
-        ok: false,
-        reason: 'Blocked: missing or invalid CSRF token.',
-      };
+    if (!cookieSessionEnabled) {
+      const message = 'Simulated browser state: no session cookie is available for the request.';
+      setRequestResult(message);
+      appendLog(`[${source}] POST /api/transfer -> ${message}`);
+      return;
     }
 
-    return {
-      ok: true,
-      reason: 'Success: transfer accepted (cookie + valid CSRF token).',
-    };
+    if (source === 'attack' && sameSiteMode !== 'none') {
+      const message = 'Simulated browser policy: SameSite blocks the cross-site cookie before the request reaches the backend.';
+      setRequestResult(message);
+      appendLog(`[${source}] POST /api/transfer -> ${message}`);
+      return;
+    }
+
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (includeToken && requestToken) {
+        headers['X-CSRF-Token'] = requestToken;
+      }
+
+      const response = await fetch('/api/transfer', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ amount: 100, source }),
+      });
+      const data = await response.json();
+      const message = data.message || data.error || 'Request completed';
+
+      setRequestResult(message);
+      appendLog(`[${source}] POST /api/transfer -> ${message}`);
+    } catch {
+      const message = 'Request failed: unable to reach the backend.';
+      setRequestResult(message);
+      appendLog(`[${source}] POST /api/transfer -> ${message}`);
+    }
   };
 
   const runAttackSimulation = () => {
-    const result = csrfProtectedTransfer({ crossSite: true, providedToken: null });
-    setRequestResult(result.reason);
-    appendLog(`[attack] POST /transfer cross-site -> ${result.reason}`);
+    sendTransferRequest({
+      includeToken: false,
+      requestToken: null,
+      source: 'attack',
+    });
   };
 
   const runLegitTransfer = () => {
-    const providedToken = csrfTokenOnForm ? csrfTokenOnServer : null;
-    const result = csrfProtectedTransfer({ crossSite: false, providedToken });
-    setRequestResult(result.reason);
-    appendLog(`[user] POST /transfer same-site -> ${result.reason}`);
+    sendTransferRequest({
+      includeToken: csrfTokenOnForm,
+      requestToken: csrfTokenInput,
+      source: 'user',
+    });
   };
 
   return (
@@ -168,10 +201,13 @@ function XSSDemo() {
 
             <label style={styles.label}>Server expected CSRF token</label>
             <input
-              value={csrfTokenOnServer}
-              onChange={(e) => setCsrfTokenOnServer(e.target.value)}
+              value={csrfTokenInput}
+              onChange={(e) => setCsrfTokenInput(e.target.value)}
               style={styles.input}
             />
+            <p style={styles.small}>
+              This input is prefilled from the backend-issued token created at login. Change it to simulate an invalid token.
+            </p>
           </div>
 
           <div style={styles.csrfFixed}>
@@ -188,7 +224,7 @@ function XSSDemo() {
             </div>
 
             <p style={styles.small}>
-              Cross-site attack sends no trusted CSRF token. If server requires token, request is blocked.
+              The legitimate transfer now performs a real backend POST and includes the token in the <code>X-CSRF-Token</code> header when enabled.
             </p>
           </div>
         </div>

@@ -1,22 +1,30 @@
 import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 
 function DemoApp() {
-  const { isLoggedIn, token, login, logout } = useAuth();
+  const { isLoggedIn, token, user, isLoading, login, logout } = useAuth();
   const navigate = useNavigate(); // useNavigate for programmatic navigation
+  const location = useLocation();
   const [email, setEmail] = useState('demo@example.com');
   const [password, setPassword] = useState('password123');
   const [loginError, setLoginError] = useState('');
 
-  const handleLogin = () => {
-    const success = login(email, password);
-    if (!success) {
-      setLoginError('Please enter email and password');
+  const fromPath = location.state?.from?.pathname;
+  const fromSearch = location.state?.from?.search || '';
+  const fromHash = location.state?.from?.hash || '';
+  const redirectTarget = fromPath && fromPath !== '/demo'
+    ? `${fromPath}${fromSearch}${fromHash}`
+    : '/demo';
+
+  const handleLogin = async () => {
+    const result = await login(email, password);
+
+    if (!result.success) {
+      setLoginError(result.error);
     } else {
       setLoginError('');
-      // Programmatic navigation after login — same as useNavigate('/dashboard')
-      navigate('/demo');
+      navigate(redirectTarget, { replace: true });
     }
   };
 
@@ -26,8 +34,8 @@ function DemoApp() {
       <div style={styles.card}>
         {!isLoggedIn ? (
           <div style={styles.loginBox}>
-            <h3>Login (Mock Auth)</h3>
-            <p>Enter any email/password to simulate login</p>
+            <h3>Login (Backend Auth)</h3>
+            <p>Use the hardcoded backend account to sign in.</p>
             <input
               type="email"
               placeholder="Email"
@@ -42,18 +50,25 @@ function DemoApp() {
               onChange={(e) => setPassword(e.target.value)}
               style={styles.input}
             />
-            <button onClick={handleLogin} style={styles.button}>
-              Login
+            <button onClick={handleLogin} style={styles.button} disabled={isLoading}>
+              {isLoading ? 'Signing in...' : 'Login'}
             </button>
             {loginError && <p style={{ color: 'red' }}>{loginError}</p>}
+            <p style={styles.helperText}>demo@example.com / password123</p>
           </div>
         ) : (
           <div>
             <div style={styles.loggedBox}>
               <h3>✅ You are logged in!</h3>
-              <p><strong>Mock token:</strong> {token}</p>
+              <p><strong>Signed in as:</strong> {user?.name || user?.email}</p>
+              <p><strong>Backend token:</strong> {token}</p>
               <button onClick={logout} style={styles.button}>Logout</button>
             </div>
+            {location.state?.from && (
+              <p style={styles.helperText}>
+                You were returned here after signing in for {location.state.from.pathname}.
+              </p>
+            )}
 
             <hr />
             <h3>Dashboard (accessible to any logged-in user)</h3>
@@ -68,7 +83,7 @@ function DemoApp() {
               <p>Admin page requires authentication (already satisfied).</p>
               <Link to="/admin" style={styles.linkButton}>Go to Admin Panel →</Link>
               <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                💡 Try manually typing <code>/admin</code> in URL while logged out → redirects here.
+                💡 Try manually typing <code>/admin</code> in URL while logged out → login sends you back there.
               </p>
             </div>
           </div>
@@ -86,6 +101,7 @@ const styles = {
   adminLinkBox: { background: '#cfe2ff', padding: '1rem', borderRadius: '6px' },
   input: { display: 'block', margin: '0.5rem 0', padding: '0.5rem', width: '250px' },
   button: { padding: '0.5rem 1rem', cursor: 'pointer', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px' },
+  helperText: { fontSize: '0.9rem', color: '#495057', marginTop: '0.75rem' },
   linkButton: { display: 'inline-block', marginTop: '0.5rem', padding: '0.4rem 0.8rem', background: '#28a745', color: 'white', textDecoration: 'none', borderRadius: '4px' },
 };
 
