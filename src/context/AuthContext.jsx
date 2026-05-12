@@ -37,6 +37,15 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const login = async (email, password) => {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
+      return {
+        success: false,
+        error: 'Enter email and password',
+      };
+    }
+
     setIsLoading(true);
 
     try {
@@ -45,7 +54,7 @@ export function AuthProvider({ children }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
       const data = await response.json();

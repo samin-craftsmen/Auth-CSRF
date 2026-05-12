@@ -1,13 +1,21 @@
 import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 
 function DemoApp() {
   const { isLoggedIn, token, user, isLoading, login, logout } = useAuth();
   const navigate = useNavigate(); // useNavigate for programmatic navigation
+  const location = useLocation();
   const [email, setEmail] = useState('demo@example.com');
   const [password, setPassword] = useState('password123');
   const [loginError, setLoginError] = useState('');
+
+  const fromPath = location.state?.from?.pathname;
+  const fromSearch = location.state?.from?.search || '';
+  const fromHash = location.state?.from?.hash || '';
+  const redirectTarget = fromPath && fromPath !== '/demo'
+    ? `${fromPath}${fromSearch}${fromHash}`
+    : '/demo';
 
   const handleLogin = async () => {
     const result = await login(email, password);
@@ -16,7 +24,7 @@ function DemoApp() {
       setLoginError(result.error);
     } else {
       setLoginError('');
-      navigate('/demo');
+      navigate(redirectTarget, { replace: true });
     }
   };
 
@@ -56,6 +64,11 @@ function DemoApp() {
               <p><strong>Backend token:</strong> {token}</p>
               <button onClick={logout} style={styles.button}>Logout</button>
             </div>
+            {location.state?.from && (
+              <p style={styles.helperText}>
+                You were returned here after signing in for {location.state.from.pathname}.
+              </p>
+            )}
 
             <hr />
             <h3>Dashboard (accessible to any logged-in user)</h3>
@@ -70,7 +83,7 @@ function DemoApp() {
               <p>Admin page requires authentication (already satisfied).</p>
               <Link to="/admin" style={styles.linkButton}>Go to Admin Panel →</Link>
               <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                💡 Try manually typing <code>/admin</code> in URL while logged out → redirects here.
+                💡 Try manually typing <code>/admin</code> in URL while logged out → login sends you back there.
               </p>
             </div>
           </div>
