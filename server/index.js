@@ -11,6 +11,8 @@ const USERS = [
   },
 ];
 
+const sessions = new Map();
+
 function sendJson(res, statusCode, payload, headers = {}) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -45,6 +47,29 @@ function readRequestBody(req) {
   });
 }
 
+function parseCookies(cookieHeader = '') {
+  return cookieHeader.split(';').reduce((cookies, pair) => {
+    const [rawKey, ...rawValue] = pair.trim().split('=');
+    if (!rawKey) {
+      return cookies;
+    }
+
+    cookies[rawKey] = decodeURIComponent(rawValue.join('=') || '');
+    return cookies;
+  }, {});
+}
+
+function getSession(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies.sessionId;
+
+  if (!sessionId) {
+    return null;
+  }
+
+  return sessions.get(sessionId) || null;
+}
+
 function handleLogin(req, res) {
   readRequestBody(req)
     .then((body) => {
@@ -56,6 +81,15 @@ function handleLogin(req, res) {
         return;
       }
 
+      const sessionId = crypto.randomUUID();
+      const csrfToken = crypto.randomUUID();
+
+      sessions.set(sessionId, {
+        email: user.email,
+        name: user.name,
+        csrfToken,
+      });
+
       sendJson(res, 200, {
         isAuthenticated: true,
         token: crypto.randomUUID(),
@@ -63,6 +97,10 @@ function handleLogin(req, res) {
           email: user.email,
           name: user.name,
         },
+        csrfToken,
+        sessionId,
+      }, {
+        'Set-Cookie': `sessionId=${encodeURIComponent(sessionId)}; HttpOnly; Path=/; SameSite=Lax`,
       });
     })
     .catch((error) => {
@@ -80,6 +118,18 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/api/login' && req.method === 'POST') {
     handleLogin(req, res);
+    return;
+  }
+
+  if (url.pathname === '/api/csrf-token' && req.method === 'GET') {
+    const session = getSession(req);
+
+    if (!session) {
+      sendJson(res, 401, { error: 'Not authenticated' });
+      return;
+    }
+
+    sendJson(res, 200, { csrfToken: session.csrfToken });
     return;
   }
 
