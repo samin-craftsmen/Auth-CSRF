@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 
 const PORT = 4000;
 
@@ -56,6 +57,8 @@ function handleLogin(req, res) {
       }
 
       sendJson(res, 200, {
+        isAuthenticated: true,
+        token: crypto.randomUUID(),
         user: {
           email: user.email,
           name: user.name,
